@@ -32,7 +32,7 @@ Môi trường: MockLLM, SQLite, pydantic-evals; eval set v1 gồm 14 item × 5 
 
 ## 3. Định nghĩa "chạy đúng"
 
-Baseline: `E-swarm-20261118-1207`, eval set SHA `1207b20aea3b`.
+Baseline: `E-swarm-20261118-c6cb`, eval set SHA `c6cbf1b79921`.
 
 | Metric | Loại | Ngưỡng | Blocking | Baseline |
 |---|---|---|---|---:|
@@ -88,9 +88,9 @@ Kết quả đã đo:
 
 | Candidate | Run ID | pass_rate | Quyết định |
 |---|---|---:|---|
-| swarm | E-swarm-20261118-1207 | 0.9857 | Baseline |
-| fixed | E-fixed-20261118-1207 | 1.0000 | exit 0 — merge |
-| seeded_regression | E-seeded_regression-20261118-1207 | 0.7143 | exit 1 — blocked |
+| swarm | E-swarm-20261118-c6cb | 0.9857 | Baseline |
+| fixed | E-fixed-20261118-c6cb | 1.0000 | exit 0 — merge |
+| seeded_regression | E-seeded_regression-20261118-c6cb | 0.7143 | exit 1 — blocked |
 
 So sánh seeded_regression với baseline:
 

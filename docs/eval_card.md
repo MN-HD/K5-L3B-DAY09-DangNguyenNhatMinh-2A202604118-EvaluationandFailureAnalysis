@@ -5,13 +5,13 @@
 
 - Ngày đánh giá: 2026-11-18.
 - Eval set: v1, `data/eval/eval_set_v1.jsonl`.
-- Eval set SHA: `1207b20aea3b`.
+- Eval set SHA: `c6cbf1b79921`.
 - Nhãn tách riêng: `data/eval/labels_v1.json`.
 - Số mẫu: 14 claim × 5 seed = 70 trial/shape.
 - Seeds: 11, 22, 33, 44, 55.
 - Metric spec: `config/metric_spec.yaml`, version `1.0`.
 - Grader implementation: commit `464cd43`.
-- Báo cáo baseline được commit tại `a516355`.
+- Báo cáo baseline được tạo lại sau khi chuẩn hoá SHA giữa Windows và Linux.
 - Harness: `pydantic-evals` + MockLLM, chạy offline.
 - Paired bootstrap: 1000 resamples, 95% CI, RNG seed 2027; đơn vị resampling là claim, sau khi lấy trung bình trên 5 seed.
 
@@ -19,9 +19,9 @@
 
 | Shape | Run ID | Report |
 |---|---|---|
-| swarm (baseline) | E-swarm-20261118-1207 | `reports/baseline_v1.json` |
-| fixed | E-fixed-20261118-1207 | `reports/eval_fixed.json` |
-| seeded_regression | E-seeded_regression-20261118-1207 | `reports/eval_seeded_regression.json` |
+| swarm (baseline) | E-swarm-20261118-c6cb | `reports/baseline_v1.json` |
+| fixed | E-fixed-20261118-c6cb | `reports/eval_fixed.json` |
+| seeded_regression | E-seeded_regression-20261118-c6cb | `reports/eval_seeded_regression.json` |
 
 Các report được sinh bằng `python -m lab9.eval`; không chỉnh sửa report thủ công.
 
