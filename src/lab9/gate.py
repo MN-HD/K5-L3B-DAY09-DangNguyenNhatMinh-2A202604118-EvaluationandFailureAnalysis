@@ -37,15 +37,86 @@ def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = N
     return []
 
 
+
 def slice_check(pr: dict, base: dict, spec: dict) -> tuple[list[str], list[str]]:
-    """M5 (Advanced): an average can hide a regression on a small, important slice.
-    For each entry of spec["slices"] ({"name", "metric", "min"?, "no_significant_drop"?, "blocking"}):
-      - value = mean of per_item(pr, metric, slice_name=name)
-      - fail if below "min", or if no_significant_drop and the paired CI over the slice's items
-        lies entirely below 0
-    Return (blocked ids like "slice:money_movement/pass_rate", report lines)."""
-    # TODO M5
-    return [], []
+    """Evaluate each configured slice independently.
+
+    Blocking conditions:
+    - Slice metric falls below its absolute floor.
+    - Paired bootstrap CI is entirely below zero.
+    - Required slice results are missing or cannot be compared.
+    """
+    blocked: list[str] = []
+    lines: list[str] = []
+    bootstrap_config = spec.get("bootstrap", {})
+
+    for slice_spec in spec.get("slices", []):
+        name = slice_spec["name"]
+        metric = slice_spec["metric"]
+        identifier = f"slice:{name}/{metric}"
+        threshold = slice_spec.get("min")
+        blocking = bool(slice_spec.get("blocking", False))
+
+        current = per_item(pr, metric, slice_name=name)
+        reference = per_item(base, metric, slice_name=name)
+
+        problems: list[str] = []
+        notes: list[str] = []
+
+        if not current:
+            problems.append("missing slice data")
+            value = None
+        else:
+            value = sum(current.values()) / len(current)
+
+            if threshold is not None and value < threshold:
+                problems.append(
+                    f"below floor {threshold}"
+                )
+
+        if slice_spec.get("no_significant_drop", False):
+            if not reference:
+                problems.append("missing baseline slice")
+            elif set(current) != set(reference):
+                problems.append("different item sets")
+            else:
+                keys = sorted(current)
+
+                delta, low, high = stats.paired_bootstrap(
+                    [current[key] for key in keys],
+                    [reference[key] for key in keys],
+                    n_resamples=bootstrap_config.get("n_resamples", 1000),
+                    rng=bootstrap_config.get("rng", 2027),
+                    confidence=bootstrap_config.get("confidence", 0.95),
+                )
+
+                notes.append(
+                    f"delta={delta:+.3f}, CI=[{low:+.3f}, {high:+.3f}]"
+                )
+
+                if high < 0:
+                    problems.append("significant regression")
+
+        if problems and blocking:
+            blocked.append(identifier)
+
+        if problems:
+            status = "BLOCK" if blocking else "warn"
+        else:
+            status = "ok"
+
+        notes.extend(problems)
+
+        lines.append(
+            f"  {identifier:<38} "
+            f"value={value!s:<8} "
+            f"min={threshold!s:<6} "
+            f"{' | '.join(notes)} "
+            f"{status}"
+        )
+
+    return blocked, lines
+
 
 
 def check(pr: dict, base: dict, spec: dict, base_spec: dict | None = None) -> tuple[list[str], list[str]]:
