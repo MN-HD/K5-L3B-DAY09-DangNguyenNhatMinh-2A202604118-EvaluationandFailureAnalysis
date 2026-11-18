@@ -111,3 +111,155 @@ Quy trình: nếu gate exit 1, không merge; phải phân tích trace và sửa 
 Tăng `eval_set_version` khi thêm hoặc thay đổi eval items, nhãn, slices hoặc adversarial cases. Khi đổi eval set, phải sinh lại baseline cùng phiên bản.
 
 Tăng `metric_spec_version` khi sửa grader, metric, ngưỡng hoặc chính sách release; giải thích thay đổi trong PR. Trên cùng eval-set version, chỉ được giữ nguyên hoặc siết chặt ngưỡng.
+
+
+---
+
+## 9. Advanced/Expert — Evaluation v2 (M5–M7)
+
+### 9.1. Dataset, baseline và khả năng tái lập
+
+- Eval set: `data/eval/eval_set_v2.jsonl`.
+- Eval set SHA: `efdf121d5397`.
+- Nhãn: `data/eval/labels_v2.json`, tách riêng khỏi các eval items.
+- Quy mô: 28 claim (14 public + 14 adversarial) × 5 seeds = 140 trials/shape.
+- Seeds: 11, 22, 33, 44, 55.
+- Metric spec: `config/metric_spec_v2.yaml`, version 2.0.
+- Baseline run ID: `E-swarm-20261118-efdf`.
+- Baseline report: `reports/baseline_v2.json`.
+- Harness: pydantic-evals, MockLLM và SQLite sandbox.
+- Bootstrap: 1000 resamples, confidence 95%, RNG 2027.
+
+Dataset v2 có 0 validation problems. Mọi report được sinh bằng
+`python -m lab9.eval`, không chỉnh sửa thủ công.
+
+### 9.2. Baseline v2 và reliability metrics
+
+| Metric | Baseline v2 |
+|---|---:|
+| approval_bypass | 0 |
+| secret_leak | 0 |
+| db_fact_kept | 0.9786 |
+| refund_amount_correct | 0.9786 |
+| pass_rate | 0.9786 |
+| reply_ledger_correct | 1.0000 |
+| proposal_amount_correct | 0.9786 |
+| pass_at_1 | 0.9786 |
+| pass_at_3 | 1.0000 |
+| pass_at_5 | 1.0000 |
+| pass_hat_1 | 0.9786 |
+| pass_hat_3 | 0.9357 |
+| pass_hat_5 | 0.8929 |
+| cost_per_success | 50.8077 |
+
+`pass_at_k` đo xác suất có ít nhất một lần thành công trong k lần thử.
+`pass_hat_k` đo xác suất tất cả k lần đều thành công.
+
+Việc `pass_at_5 = 1.0` không đồng nghĩa agent luôn đáng tin cậy:
+`pass_hat_5 = 0.8929` cho thấy vẫn tồn tại các claim có ít nhất
+một lần chạy thất bại trong năm seed.
+
+Metric `pass_hat_5` là blocking, với floor 0.80.
+
+### 9.3. A/A calibration
+
+So sánh cùng agent `swarm`, cùng eval set v2:
+
+- Set A: seeds 11, 22, 33, 44, 55.
+- Set B: seeds 66, 77, 88, 99, 110.
+- Quan sát: delta bằng 0.0000 trên mọi metric, bao gồm
+  `pass_rate`, `pass_hat_5` và `cost_per_success`.
+
+Do A/A không quan sát thấy biến động trong sandbox MockLLM,
+floor `pass_hat_5 = 0.80` được chọn thấp hơn baseline 0.8929,
+nhưng vẫn đủ để chặn những biến thể kém ổn định trong bộ public.
+
+A/A delta bằng 0 không chứng minh noise của model production bằng 0.
+
+### 9.4. Slice regression gate
+
+Ba slice blocking trong spec v2:
+
+| Slice | Metric | Floor | Baseline |
+|---|---|---:|---:|
+| denial | pass_rate | 0.90 | 0.9455 |
+| money_movement | pass_rate | 0.90 | 1.0000 |
+| adversarial | pass_rate | 0.85 | 0.9714 |
+
+Biến thể `slice_regression`:
+
+- Overall pass_rate: 0.9357, vẫn cao hơn floor 0.85.
+- Slice `money_movement`: 0.85, thấp hơn floor 0.90.
+- Gate: `exit 1 — blocked: slice:money_movement/pass_rate`.
+
+Vì vậy, slice gate phát hiện được lỗi quan trọng mà floor của
+overall pass_rate không phát hiện.
+
+### 9.5. Flaky reliability regression
+
+Biến thể `flaky_regression` có:
+
+- Overall pass_rate: 0.9143.
+- pass_hat_5: 0.5714.
+- Minimum pass_hat_5: 0.80.
+
+Gate chặn biến thể này bằng các kiểm tra:
+
+- `pass_rate`: significant paired regression.
+- `pass_hat_5`: thấp hơn minimum.
+- `proposal_amount_correct`: significant paired regression.
+- `slice:money_movement/pass_rate`: thấp hơn floor và significant regression.
+
+### 9.6. Mutation scorecard và false alarms
+
+| Variant | Expected | Actual |
+|---|---|---|
+| fixed | merge | merge |
+| honest_refactor | merge | merge |
+| seeded_regression | block | block |
+| slice_regression | block | block |
+| flaky_regression | block | block |
+
+Mutation score: 3/3; false alarms: 0.
+
+`honest_refactor` có cảnh báo `cost_per_success` nhưng vẫn merge,
+vì metric này không blocking. Những thay đổi hợp lệ về lời văn
+hoặc số lần lookup không tự động bị coi là lỗi.
+
+### 9.7. Evaluation integrity — M7
+
+`integrity_check` từ chối report không đáng tin cậy, bao gồm:
+
+- NaN, infinity hoặc metric thiếu.
+- Thiếu, trùng hoặc chọn lọc item/seed.
+- Evaluator failure và row score bị thiếu.
+- Slice tags bị thay đổi so với baseline.
+- Nới ngưỡng, bỏ metric blocking hoặc bỏ slice bảo vệ trên
+  cùng phiên bản eval set.
+
+Bốn public gaming traps đều bị chặn:
+
+1. `evaluator_errors_as_nan`: blocked.
+2. `dropped_failing_rows`: blocked.
+3. `cherry_picked_seeds`: blocked.
+4. `loosened_spec`: blocked.
+
+Baseline v2 so với chính nó: `exit 0 — merge`.
+Advanced/Expert public tests: 12 passed.
+
+### 9.8. Giới hạn và release decision
+
+Kết quả dựa trên 28 claims và năm seed cho mỗi claim, chưa đại diện
+cho môi trường production. Các biến thể và traps công khai không
+thay thế bộ hidden của giảng viên.
+
+Một lỗi hiếm chỉ xảy ra khoảng một trong ba seed có thể không
+được phát hiện ổn định chỉ với năm seed. Cần mở rộng eval set
+và tăng số seed trước khi dùng làm bằng chứng release thực tế.
+
+Các ngưỡng v2 áp dụng cho eval set mới và baseline mới;
+không so sánh trực tiếp với baseline v1 như thể hai tập dữ liệu
+có cùng phân phối.
+
+Release chỉ được chấp nhận khi tất cả blocking metrics, slice
+checks và integrity checks đều đạt.
