@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import math
+
 from collections.abc import Sequence
 
 import numpy as np
@@ -122,11 +124,35 @@ def paired_bootstrap(
     )
 
 
+
+def _validate_pass_k(n: int, c: int, k: int) -> None:
+    """Validate sample counts before computing reliability metrics."""
+    if any(type(value) is not int for value in (n, c, k)):
+        raise ValueError("n, c, and k must be integers.")
+
+    if n <= 0:
+        raise ValueError("n must be positive.")
+    if not 0 <= c <= n:
+        raise ValueError("c must be between 0 and n.")
+    if not 1 <= k <= n:
+        raise ValueError("k must be between 1 and n.")
+
+
 def pass_at_k(n: int, c: int, k: int) -> float:
-    """M6: Advanced — implement in the later checkpoint."""
-    raise NotImplementedError
+    """Probability that at least one of k sampled attempts succeeds."""
+    _validate_pass_k(n, c, k)
+
+    if n - c < k:
+        return 1.0
+
+    return 1.0 - math.comb(n - c, k) / math.comb(n, k)
 
 
 def pass_hat_k(n: int, c: int, k: int) -> float:
-    """M6: Advanced — implement in the later checkpoint."""
-    raise NotImplementedError
+    """Probability that all k sampled attempts succeed (pass^k)."""
+    _validate_pass_k(n, c, k)
+
+    if c < k:
+        return 0.0
+
+    return math.comb(c, k) / math.comb(n, k)
