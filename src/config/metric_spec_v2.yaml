@@ -58,6 +58,16 @@ metrics:
       no_significant_drop: true
     blocking: true
 
+
+  - id: pass_hat_5
+    kind: capability
+    level: system
+    grader: lab9.stats.pass_hat_k
+    threshold:
+      min: 0.80
+    blocking: true
+
+
   - id: cost_per_success
     kind: system
     level: system
